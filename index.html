@@ -21,7 +21,8 @@
   button:hover { background: var(--navy2); }
   button:disabled { opacity: .45; cursor: not-allowed; }
   button.secondary { background: white; color: var(--navy); border: 2px solid var(--navy); }
-  #reader { width: 100%; margin-top: 16px; overflow: hidden; border-radius: 10px; }
+  #reader { width: 100%; margin-top: 16px; overflow: hidden; border-radius: 10px; display: none; }
+  #reader.active { display: block; }
   #result { margin-top: 18px; padding: 22px 8px; border-radius: 12px; font-size: 27px; font-weight: bold; overflow-wrap: anywhere; }
   .match { background: var(--green-bg); color: var(--green); }
   .different { background: var(--red-bg); color: var(--red); }
@@ -57,7 +58,8 @@ async function stopScanner() {
     try { await scanner.clear(); } catch (e) {}
     scanner = null;
   }
-  $("reader").innerHTML = "";
+  $("reader").classList.remove("active");
+  busy = false;
 }
 
 async function startScan() {
@@ -69,14 +71,15 @@ async function startScan() {
   busy = true;
   $("scan").disabled = true;
   $("instruction").textContent = firstCode === null ? "Scanning barcode 1..." : "Scanning barcode 2...";
-  $("hint").textContent = "Point camera at barcode...";
+  $("hint").textContent = "Point camera at barcode... Scanner will stop automatically.";
+  $("reader").classList.add("active");
   
   try {
     scanner = new Html5Qrcode("reader");
     await scanner.start(
       { facingMode: "environment" },
       {
-        fps: 12,
+        fps: 10,
         qrbox: (width, height) => ({
           width: Math.max(180, Math.min(Math.floor(width * 0.9), 350)),
           height: Math.max(90, Math.min(Math.floor(height * 0.35), 160))
@@ -91,18 +94,18 @@ async function startScan() {
       async decodedText => {
         if (!busy) return;
         busy = false;
-        await stopScanner();
+        await stopScanner(); // ✅ IMMEDIATE STOP after reading one code
         
         if (firstCode === null) {
-          // First scan complete
+          // First scan done
           firstCode = decodedText;
           $("first").textContent = firstCode;
-          $("instruction").textContent = "First barcode captured. Tap button for second.";
+          $("instruction").textContent = "First barcode captured.";
           $("scan").textContent = "Scan Second Barcode";
-          $("hint").textContent = "Now tap button to scan the barcode to compare.";
+          $("hint").textContent = "Tap button above to scan the second barcode.";
           $("scan").disabled = false;
         } else {
-          // Second scan complete
+          // Second scan done
           secondCode = decodedText;
           $("second").textContent = secondCode;
           $("scan").classList.add("hidden");
@@ -116,11 +119,10 @@ async function startScan() {
             : "The barcode values are different.";
         }
       },
-      () => {}
+      () => {} // No auto-scan background mode — only active when button pressed
     );
   } catch (err) {
     await stopScanner();
-    busy = false;
     $("instruction").textContent = "Camera unavailable. Allow camera access and try again.";
     $("hint").textContent = "Open this page over HTTPS and allow camera permission.";
     $("scan").disabled = false;
@@ -130,7 +132,7 @@ async function startScan() {
 $("scan").addEventListener("click", startScan);
 $("again").addEventListener("click", async () => {
   await stopScanner();
-  firstCode = null; secondCode = null; busy = false;
+  firstCode = null; secondCode = null;
   $("first").textContent = "Not scanned";
   $("second").textContent = "Not scanned";
   $("result").className = "hidden";
